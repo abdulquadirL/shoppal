@@ -28,14 +28,17 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     if (!socket) return;
+
     socket.on("order_assigned", (updatedOrder: Order) => {
       setOrders(prev =>
         prev.map(o => (o.id === updatedOrder.id ? updatedOrder : o))
       );
     });
 
-    return () => socket.off("order_assigned");
-  }, [socket]);
+    return () => { 
+      socket.off("order_assigned");
+  };
+ }, [socket]);
 
   return (
     <div className="flex flex-col lg:flex-row h-full gap-4 p-4">

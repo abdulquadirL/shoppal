@@ -31,12 +31,12 @@ export default function ShopperDashboard() {
       setOrders(prev =>
         prev.map(o => (o.id === updatedOrder.id ? updatedOrder : o))
       );
+    });
 
-        return () => socket.off("order_assigned");
-  }, );
-    }, [socket]);
-
-  
+    return () => {
+      socket.off("order_assigned");
+  };
+ }, [socket]);
 
 
   const handlePickOrder = (orderId: string) => {

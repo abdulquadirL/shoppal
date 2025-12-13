@@ -17,7 +17,7 @@ type Order = {
 export default function CustomerOrderDemo() {
   const [order, setOrder] = useState<Order | null>(null);
   const customerId = "charlie-customer"; // Replace with seeded ID
-  const socket = useSocket(customerId);
+  const socket = useSocket();
 
   useEffect(() => {
   // Ensure the customerId exists before fetching
@@ -73,9 +73,17 @@ export default function CustomerOrderDemo() {
     <div className="flex flex-col gap-4 p-4">
       <h1 className="text-xl font-bold">Customer Demo: Track Your Order</h1>
 
-      <OrderStatusTimeline status={order.status as any} />
+      <OrderStatusTimeline orderId={""}  />
 
-      <LiveMapTracker sessionId={order.shop_session} />
+      <LiveMapTracker order={{
+        id: "",
+        location: {
+          lat: 0,
+          lng: 0
+        },
+        shopperId: undefined,
+        customerId: undefined
+      }}  />
 
       <button
         className="bg-blossom-green text-white py-2 px-4 rounded mt-4"
