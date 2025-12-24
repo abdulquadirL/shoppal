@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { Server } from "socket.io";
 import { createServer } from "http";
-import prisma from "@/lib/prisma";
+import {prisma} from "@/lib/prisma";
 
 export const runtime = "nodejs"; // ensure Node runtime
 

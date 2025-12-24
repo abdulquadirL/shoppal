@@ -1,13 +1,13 @@
-export type SenderRole = "customer" | "shopper" | "system";
-
-export interface Message {
-  readBy: string[];
-  id: string;
+export type Message = {
+  id?: string;
   orderId: string;
   senderId: string;
-  senderRole: SenderRole;
+  senderRole: "customer" | "shopper" | "system";
   text?: string | null;
   attachment?: string | null;
-  createdAt: string;
-  
-}
+  audio?: string | null;
+  createdAt?: string;
+  readBy?: string[];
+};
+
+

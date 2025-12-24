@@ -27,6 +27,7 @@
     "transpileOnly": true
   },
   "include": [
+    "types",
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",

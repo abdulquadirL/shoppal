@@ -1,164 +1,177 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import axios from "axios";
+import { cn } from "@/lib/cn";
 import { useSocket } from "@/hooks/useSocket";
 import { Message } from "@/types/chat";
-import { Avatar, Input, Button } from "@/app/components/ui";
-import { cn } from "@/lib/cn";
+import { Button, Input } from "../ui";
+import { ScrollArea } from "../ui/scroll-area";
 
 interface ChatPanelProps {
   orderId: string;
-  currentUserId: string;
 }
 
-export function ChatPanel({ orderId, currentUserId }: ChatPanelProps) {
+export default function ChatPanel({ orderId }: ChatPanelProps) {
   const socket = useSocket();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState("");
+  const [typing, setTyping] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-
+  /* ---------------- Fetch messages ---------------- */
   useEffect(() => {
-    fetch(`/api/chat/messages?orderId=${orderId}`)
-      .then((res) => res.json())
-      .then((data: Message[]) => setMessages(data));
+    axios
+      .get(`/api/chat/messages?orderId=${orderId}`)
+      .then(res => setMessages(res.data));
   }, [orderId]);
 
+  /* ---------------- Socket logic ---------------- */
   useEffect(() => {
     if (!socket) return;
+
     socket.emit("join_order", orderId);
 
     socket.on("receive_message", (msg: Message) => {
-      if (msg.senderRole === "system") return; // optionally ignore system messages
-      setMessages(prev => [...prev, { ...msg, readBy: msg.readBy ?? [] }]);
-      scrollToBottom();
-
-      if (msg.senderId !== currentUserId) {
-        socket.emit("read_message", { messageId: msg.id, userId: currentUserId });
-      }
+      setMessages(prev => [...prev, msg]);
     });
 
-    socket.on("typing", ({ userId }) => {
-      if (userId !== currentUserId) setTypingUsers(prev => Array.from(new Set([...prev, userId])));
-    });
-
-    socket.on("stop_typing", ({ userId }) => {
-      setTypingUsers(prev => prev.filter(id => id !== userId));
-    });
-
-    socket.on("message_read", ({ messageId, userId }) => {
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === messageId
-            ? { ...msg, readBy: Array.from(new Set([...(msg.readBy || []), userId])) }
-            : msg
-        )
-      );
-    });
+    socket.on("typing", () => setTyping(true));
+    socket.on("stop_typing", () => setTyping(false));
 
     return () => {
       socket.off("receive_message");
       socket.off("typing");
       socket.off("stop_typing");
-      socket.off("message_read");
     };
-  }, [socket, orderId, currentUserId]);
+  }, [socket, orderId]);
 
-  const handleSend = (attachmentUrl?: string) => {
-    if (!newMessage.trim() && !attachmentUrl) return;
+  /* ---------------- Auto scroll ---------------- */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
 
-    const msg: Message = {
-      id: crypto.randomUUID(),
+  /* ---------------- Send text ---------------- */
+  async function sendMessage() {
+    if (!text.trim()) return;
+
+    socket?.emit("stop_typing", orderId);
+
+    const { data } = await axios.post("/api/chat/messages", {
       orderId,
-      senderId: currentUserId,
-      senderRole: "customer",
-      text: newMessage || null,
-      attachment: attachmentUrl || null,
-      createdAt: new Date().toISOString(),
-      readBy: [],
-    };
+      content: text,
+    });
 
-    socket?.emit("send_message", msg);
-    setMessages(prev => [...prev, msg]);
-    setNewMessage("");
-    scrollToBottom();
-    socket?.emit("stop_typing", { orderId, userId: currentUserId });
-  };
+    setMessages(prev => [...prev, data]);
+    setText("");
+  }
 
-  const handleTyping = (value: string) => {
-    setNewMessage(value);
-    if (!socket) return;
-    value.length
-      ? socket.emit("typing", { orderId, userId: currentUserId })
-      : socket.emit("stop_typing", { orderId, userId: currentUserId });
-  };
+  /* ---------------- Typing ---------------- */
+  function handleTyping(val: string) {
+    setText(val);
+    socket?.emit("typing", orderId);
+    setTimeout(() => socket?.emit("stop_typing", orderId), 800);
+  }
 
-  const handleFileUpload = async (file: File) => {
+  /* ---------------- File upload ---------------- */
+  async function handleFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/chat/upload", { method: "POST", body: formData });
-    const data = await res.json();
-    handleSend(data.url);
-  };
+    formData.append("orderId", orderId);
+
+    const { data } = await axios.post("/api/chat/upload", formData);
+    socket?.emit("send_message", data);
+  }
+
+  /* ---------------- Voice note ---------------- */
+  async function recordVoice() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    const chunks: BlobPart[] = [];
+
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      const file = new File([blob], "voice.webm");
+
+      await handleFile(file);
+    };
+
+    recorder.start();
+    setTimeout(() => recorder.stop(), 5000);
+  }
 
   return (
-    <div className="flex flex-col h-full border rounded-lg bg-white shadow-sm overflow-hidden">
-      <div className="flex-1 p-4 overflow-y-auto space-y-3">
+    <div className="flex flex-col h-full border rounded-xl bg-background">
+      <ScrollArea className="flex-1 p-4 space-y-3">
         {messages.map(msg => (
           <div
             key={msg.id}
             className={cn(
-              "flex items-start space-x-2",
-              msg.senderId === currentUserId ? "justify-end" : "justify-start"
+              "max-w-[75%] p-2 rounded-lg text-sm",
+              msg.senderRole === "customer"
+                ? "bg-muted ml-auto"
+                : "bg-primary text-primary-foreground"
             )}
           >
-            {msg.senderId !== currentUserId && <Avatar />}
-            <div className="flex flex-col max-w-xs">
-              {msg.text && (
-                <div
-                  className={cn(
-                    "rounded-lg p-2 text-sm",
-                    msg.senderId === currentUserId ? "bg-black text-white self-end" : "bg-gray-200 text-black"
-                  )}
-                >
-                  {msg.text}
-                </div>
-              )}
-              {msg.attachment && <img src={msg.attachment} alt="attachment" className="rounded-md mt-1 max-h-48" />}
-              {msg.readBy.length > 0 && msg.senderId === currentUserId && (
-                <div className="text-xs text-gray-400 self-end mt-1">
-                  Seen by {msg.readBy.length} user{msg.readBy.length > 1 ? "s" : ""}
-                </div>
-              )}
-            </div>
+            {msg.text && <p>{msg.text}</p>}
+
+            {msg.attachment && msg.attachment.endsWith(".webm") && (
+              <audio controls src={msg.attachment} />
+            )}
+
+            {msg.attachment && !msg.attachment.endsWith(".webm") && (
+              <Image
+                src={msg.attachment}
+                alt="attachment"
+                width={180}
+                height={180}
+                className="rounded cursor-pointer"
+                onClick={() => setPreview(msg.attachment ?? null)}
+              />
+            )}
+
+            <p className="text-[10px] opacity-70 mt-1">
+              {msg.readBy && msg.readBy.length > 1 ? "Seen" : "Delivered"}
+            </p>
           </div>
         ))}
-        {typingUsers.length > 0 && <div className="text-sm text-gray-500">{typingUsers.join(", ")} typing...</div>}
-        <div ref={messagesEndRef} />
+
+        {typing && <p className="text-xs italic">Typing...</p>}
+        <div ref={bottomRef} />
+      </ScrollArea>
+
+      {/* ---------------- Input ---------------- */}
+      <div className="p-3 border-t flex gap-2">
+        <Input
+          value={text}
+          onChange={e => handleTyping(e.target.value)}
+          placeholder="Type message..."
+        />
+
+        <Button onClick={sendMessage}>Send</Button>
+        <Button variant="outline" onClick={recordVoice}>🎙</Button>
+
+        <Input
+          type="file"
+          className="hidden"
+          id="file"
+          onChange={e => e.target.files && handleFile(e.target.files[0])}
+        />
+        <label htmlFor="file" className="cursor-pointer">📎</label>
       </div>
 
-      <div className="p-4 border-t flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
-        <Input
-          placeholder="Type a message..."
-          value={newMessage}
-          onChange={e => handleTyping(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSend()}
-        />
-        <div className="flex space-x-2">
-          <input
-            type="file"
-            id="file-upload"
-            className="hidden"
-            onChange={e => e.target.files && handleFileUpload(e.target.files[0])}
-          />
-          <label htmlFor="file-upload" className="cursor-pointer bg-gray-200 px-3 py-1 rounded-md text-sm hover:bg-gray-300">
-            📎
-          </label>
-          <Button onClick={() => handleSend()}>Send</Button>
+      {/* ---------------- Image lightbox ---------------- */}
+      {preview && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          onClick={() => setPreview(null)}
+        >
+          <Image src={preview} alt="preview" width={500} height={500} />
         </div>
-      </div>
+      )}
     </div>
   );
 }

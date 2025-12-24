@@ -12,17 +12,17 @@ export async function assignNearestShopper(orderId: string) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Order not found");
 
-  const { customerLatitude: lat, customerLongitude: lng, storeId } = order;
+  const { lat, lng, storeId } = order;
 
   // fetch available shoppers with locations in same market (store's market logic depends on your schema)
   const sessions = await prisma.shopperLocation.findMany({
     where: { /* add market filter if available */ },
   });
 
-  const available = sessions.map(s => ({
+  const available = sessions.map((s: { latitude: number; longitude: number; }) => ({
     ...s,
     distance: haversine(lat, lng, s.latitude, s.longitude)
-  })).sort((a,b) => a.distance - b.distance);
+  })).sort((a: { distance: number; },b: { distance: number; }) => a.distance - b.distance);
 
   if (!available.length) return null;
   const chosen = available[0];

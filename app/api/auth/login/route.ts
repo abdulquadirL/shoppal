@@ -4,7 +4,19 @@ import {prisma} from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
-  const user = await prisma.user.findUnique({ where: { email } });
+  //const user = await prisma.user.findUnique({ where: { email } });
+
+  const user = await prisma.user.findUnique({
+  where: { email },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    role: true,
+    passwordHash: true, // ✅ explicitly include
+  },
+});
+
 
   if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 

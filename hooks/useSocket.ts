@@ -1,13 +1,22 @@
+"use client";
 
 import { io, Socket } from "socket.io-client";
 import { useEffect, useState } from "react";
-import type { ServerToClientEvents, ClientToServerEvents } from "@/types/socket";
+import {
+  ClientToServerEvents,
+  ServerToClientEvents,
+} from "@/types/socket";
 
 export function useSocket() {
-  const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const [socket, setSocket] = useState<
+    Socket<ServerToClientEvents, ClientToServerEvents> | null
+  >(null);
 
   useEffect(() => {
-    const s = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
+    const s = io({
+      path: "/api/socket",
+    });
+
     setSocket(s);
 
     return () => {

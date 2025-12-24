@@ -1,59 +1,62 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSocket } from "@/hooks/useSocket";
-import { Card } from "@/app/components/ui";
+import { Socket } from "socket.io-client";
+import { OrderStatus } from "@/types/order";
 
-interface StatusUpdate {
-  id: string;
-  status: string;
-  timestamp: string;
+export interface OrderStatusUpdate {
+  orderId: string;
+  status: OrderStatus;
+  updatedAt: string;
 }
 
 interface OrderStatusTimelineProps {
   orderId: string;
+  socket: Socket | null;
 }
 
-export function OrderStatusTimeline({ orderId }: OrderStatusTimelineProps) {
-  const [timeline, setTimeline] = useState<StatusUpdate[]>([]);
-  const socket = useSocket();
+export default function OrderStatusTimeline({
+  orderId,
+  socket,
+}: OrderStatusTimelineProps) {
+  const [timeline, setTimeline] = useState<OrderStatusUpdate[]>([]);
 
   useEffect(() => {
-    fetch(`/api/orders/${orderId}/status`)
-      .then(res => res.json())
-      .then(setTimeline);
-  }, [orderId]);
-
-  useEffect(() => {
-
     if (!socket) return;
 
+    // Join the order room for real-time updates
     socket.emit("join_order", orderId);
 
-    const handleStatusUpdate = (update: StatusUpdate) => {
-    setTimeline(prev => [...prev, update]);
-  };
+    // Listen for status updates
+    const handleStatusUpdate = (update: OrderStatusUpdate) => {
+      setTimeline((prev) => [...prev, update]);
+    };
 
-    socket.on("order_status_update", (update) => {
-      setTimeline(prev => [...prev, update]);
-    });
+    socket.on("order_status_update", handleStatusUpdate);
 
-    return () => { 
+    // Cleanup listener on unmount
+    return () => {
       socket.off("order_status_update", handleStatusUpdate);
     };
   }, [orderId, socket]);
 
   return (
-    <Card className="p-4">
-      <h4 className="font-semibold mb-2">Order Timeline</h4>
-      <ul className="space-y-2">
-        {timeline.map(item => (
-          <li key={item.id} className="flex justify-between text-sm">
-            <span>{item.status}</span>
-            <span className="text-gray-400">{new Date(item.timestamp).toLocaleTimeString()}</span>
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <div className="flex flex-col gap-2 p-4 border rounded-md shadow-sm bg-white">
+      <h3 className="text-lg font-semibold">Order Timeline</h3>
+      {timeline.length === 0 ? (
+        <p className="text-gray-500">No updates yet</p>
+      ) : (
+        <ul className="space-y-1">
+          {timeline.map((update, idx) => (
+            <li key={idx} className="flex justify-between items-center">
+              <span className="capitalize">{update.status.replace("_", " ")}</span>
+              <span className="text-xs text-gray-400">
+                {new Date(update.updatedAt).toLocaleTimeString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

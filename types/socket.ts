@@ -1,19 +1,37 @@
+
+// types/socket.ts
+
 import { Message } from "@/types/chat";
 
+/* =======================
+   Client → Server Events
+======================= */
 export interface ClientToServerEvents {
-  send_message: (msg: Message) => void;
-  read_message: ({ messageId, userId }: { messageId: string; userId: string }) => void;
-  typing: (payload: { orderId: string; userId: string }) => void;
-  stop_typing: (payload: { orderId: string; userId: string }) => void;
   join_order: (orderId: string) => void;
+  send_message: (message: Message) => void;
+  typing: (orderId: string) => void;
+  stop_typing: (orderId: string) => void;
+  order_accept: (payload: {
+    orderId: string;
+    expiresIn: number;
+  }) => void;
+  order_reject: (orderId: string) => void;
 }
 
+/* =======================
+   Server → Client Events
+======================= */
 export interface ServerToClientEvents {
-  receive_message: (msg: Message) => void;
-  message_read: ({ messageId, userId }: { messageId: string; userId: string }) => void;
-  typing: (payload: { userId: string }) => void;
-  stop_typing: (payload: { userId: string }) => void;
-  order_assigned: (order: any) => void;
-  order_status_update: (update: { id: string; status: string; timestamp: string }) => void;
-  shopper_location: ({ lat, lng }: { lat: number; lng: number }) => void;
+  receive_message: (message: Message) => void;
+  typing: (userId: string) => void;
+  stop_typing: (userId: string) => void;
+  order_assigned: (payload: { orderId: string; shopperId: string }) => void;
+  order_offer: (payload: {
+    orderId: string;
+    expiresIn: number;
+  }) => void;
+  order_status_update: (update: {
+    status: string;
+    timestamp: string;
+  }) => void;
 }

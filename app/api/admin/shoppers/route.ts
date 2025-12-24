@@ -1,0 +1,19 @@
+import { NextResponse } from "next/server";
+//import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+
+export async function GET() {
+  const session = await auth();
+
+  if (!session || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const shoppers = await prisma.shopper.findMany({
+    where: { isAvailable: true },
+    select: { id: true, name: true },
+  });
+
+  return NextResponse.json(shoppers);
+}

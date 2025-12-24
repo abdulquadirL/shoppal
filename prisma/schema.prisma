@@ -1,16 +1,22 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/client"
+  provider   = "prisma-client-js"
+  engineType = "binary"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  passwordHash  String // 🔐 hashed
+  role      UserRole @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
 }
 
 model Customer {
@@ -23,70 +29,90 @@ model Customer {
 }
 
 model Shopper {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  email       String   @unique
+  email       String  @unique
   lat         Float
   lng         Float
-  isAvailable Boolean  @default(true)
-  marketId    String
-  orders      Order[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  market      Market   @relation(fields: [marketId], references: [id])
+  isAvailable Boolean @default(true)
+
+  marketId String
+  market   Market @relation("MarketShoppers", fields: [marketId], references: [id])
+
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Market {
-  id        String    @id @default(cuid())
-  name      String
-  lat       Float
-  lng       Float
-  shoppers  Shopper[]
-  orders    Order[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id   String @id @default(cuid())
+  name String
+  lat  Float
+  lng  Float
+
+  shoppers Shopper[] @relation("MarketShoppers")
+  orders   Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id         String  @id @default(cuid())
+  customerId String
+  shopperId  String?
+  marketId   String
+
+  shopSession String? // socket room id
+  status      OrderStatus @default(PENDING)
+
+  lat Float
+  lng Float
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  shopper  Shopper? @relation(fields: [shopperId], references: [id])
+  market   Market   @relation(fields: [marketId], references: [id])
+
+  items        OrderItem[]
+  chatMessages ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+
+  @@index([customerId])
+  @@index([shopperId])
+  @@index([marketId])
 }
 
 model OrderItem {
-  id       String @id @default(cuid())
-  orderId  String
+  id      String @id @default(cuid())
+  orderId String
+
   product  String
   quantity Int
 
   order Order @relation(fields: [orderId], references: [id])
-}
 
-model Order {
-  id           String        @id @default(cuid())
-  customerId   String
-  shopperId    String? // assigned shopper
-  marketId     String
-  shop_session String? // for real-time socket room
-  status       OrderStatus   @default(PENDING)
-  lat          Float
-  lng          Float
-  chatMessages ChatMessage[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  customer Customer    @relation(fields: [customerId], references: [id])
-  shopper  Shopper?    @relation(fields: [shopperId], references: [id])
-  market   Market      @relation(fields: [marketId], references: [id])
-  items    OrderItem[]
+  @@index([orderId])
 }
 
 model ChatMessage {
-  id         String   @id @default(cuid())
+  id         String     @id @default(cuid())
   orderId    String
   senderId   String
-  senderRole String
-  text       String?
-  attachment String? // For attachments
-  createdAt  DateTime @default(now())
+  senderRole SenderRole
 
-  // Read receipts
-  readBy String[] @default([]) // stores user IDs who read this message
-  order  Order    @relation(fields: [orderId], references: [id])
+  text       String?
+  attachment String?
+  voiceNote  String?
+
+  readBy String[] @default([])
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
 
   @@index([orderId])
 }
@@ -94,6 +120,7 @@ model ChatMessage {
 enum OrderStatus {
   PENDING
   SHOPPER_ASSIGNED
+  AWAITING_ACCEPTANCE
   PICKING
   DELIVERING
   DELIVERED
@@ -102,4 +129,11 @@ enum OrderStatus {
 enum SenderRole {
   CUSTOMER
   SHOPPER
+  SYSTEM
+}
+
+enum UserRole {
+  CUSTOMER
+  SHOPPER
+  ADMIN
 }
